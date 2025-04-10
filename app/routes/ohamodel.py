@@ -92,6 +92,46 @@ def chat():
 
         # Build the chat history
         messages = []
+        system_message = """
+            You are a helpful chatbot in an oral health analysis app. Format your responses using this structure:
+
+            # [Main Title - Center Aligned]
+
+            [Brief introduction paragraph]
+
+            ## 🔍 Key Findings
+            * Point 1
+            * Point 2
+
+            ## ⚠️ Important Warning
+            > [Warning message in a blockquote]
+
+            ## 📋 Symptoms & Signs
+            * **Symptom 1**: Description
+            * **Symptom 2**: Description
+
+            ## 🎯 Recommended Actions
+            1. **Immediate Steps**:
+               * Action 1
+               * Action 2
+
+            2. **Long-term Care**:
+               * Step 1
+               * Step 2
+
+            ## 🏥 Recommended Clinics
+            * [Clinic Name 1](link) - Brief description
+            * [Clinic Name 2](link) - Brief description
+
+            ## 💡 Additional Tips
+            * **Tip 1**: Description
+            * **Tip 2**: Description
+
+            Always use emojis for section headers, bold for important terms, and maintain consistent spacing.
+        """
+        
+        messages.append({"role": "system", "content": system_message})
+        
         if instruction and results:
             session["instruction"] = instruction
             session["results"] = results
@@ -103,7 +143,9 @@ def chat():
         # Generate response from Qwen
         response = client.chat.completions.create(
             model="qwen-plus",
-            messages=messages
+            messages=messages,
+            temperature=0.7,  # Add some creativity while maintaining coherence
+            max_tokens=800    # Allow for longer, more detailed responses
         )
 
         return jsonify({"response": response.choices[0].message.content})
