@@ -80,25 +80,33 @@ def chat():
         instruction = data.get("instruction", "").strip()
         results = data.get("results", "").strip()
         message = data.get("message", "").strip()
-        chat_history = data.get("chat_history", "").strip()  # Accept chat history from frontend
+        chat_history = data.get("chat_history", "").strip()
 
-        model = get_gen_ai_model()
+        from openai import OpenAI
+        import os
 
-        # Check if this is the first message
+        client = OpenAI(
+            api_key=os.getenv("SAMUELS_API_KEY"),
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        )
+
+        # Build the chat history
+        messages = []
         if instruction and results:
-            # Store context in session
             session["instruction"] = instruction
             session["results"] = results
-            full_chat_history = f"{instruction}\n{results}\n\nUser: {message}"
+            messages.append({"role": "system", "content": instruction})
+            messages.append({"role": "user", "content": f"{results}\n\n{message}"})
         else:
-            # Use provided chat_history instead of reconstructing it
-            full_chat_history = chat_history + f"\nUser: {message}"
+            messages.append({"role": "user", "content": f"{chat_history}\n\n{message}"})
 
-        # Generate AI response
-        response = model.generate_content(full_chat_history)
+        # Generate response from Qwen
+        response = client.chat.completions.create(
+            model="qwen-plus",
+            messages=messages
+        )
 
-        return jsonify({"response": response.text})
+        return jsonify({"response": response.choices[0].message.content})
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
