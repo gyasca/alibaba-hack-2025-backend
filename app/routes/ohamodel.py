@@ -6,6 +6,7 @@ from io import BytesIO
 from PIL import Image
 import os
 import google.generativeai as google_gen_ai
+from oss_utils import upload_to_oss
 
 # Define the Blueprint
 ohamodel_bp = Blueprint('ohamodel', __name__)
@@ -15,7 +16,6 @@ model_path = os.path.join(os.getcwd(), 'aimodels/oha/best.pt')
 model = YOLO(model_path)
 
 # Generative AI Google Gemini model
-# Initialize Google Gemini AI API
 def get_gen_ai_model():
     api_key = current_app.config.get("GREGORY_GEMINI_API_KEY")  # Use .get() to avoid errors if key is missing
     if not api_key:
@@ -24,50 +24,65 @@ def get_gen_ai_model():
     google_gen_ai.configure(api_key=api_key)
     return google_gen_ai.GenerativeModel("gemini-pro")
 
-
 @ohamodel_bp.route('/predict', methods=['POST'])
 def predict():
-    # Check if an image is included in the request
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file part'}), 400
-    
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'error': 'No selected file'}), 400
-
     try:
-        print(f"Received file: {file.filename}")  # Debugging line
-        # Convert the image to the format YOLOv8 expects
-        img = Image.open(file.stream)
+        # Check if an image is included in the request
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
         
-        # Run inference on the image using YOLOv8
-        results = model(img)  # Run inference on the image
-        print(f"Results: {results}")  # Debugging line
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        print(f"Received file: {file.filename}")  # Debugging line
+        
+        # Read file once into memory
+        file_data = file.read()
+        
+        # Upload to OSS using a copy of the data
+        try:
+            file_copy = BytesIO(file_data)
+            oss_url = upload_to_oss(file_copy, file.filename)
+        except Exception as e:
+            print(f"OSS upload error: {str(e)}")
+            return jsonify({'error': 'Failed to upload to OSS'}), 500
+        
+        # Use another copy for model inference
+        try:
+            img = Image.open(BytesIO(file_data))
+            results = model(img)  # Run inference on the image
+            print(f"Results: {results}")  # Debugging line
+        except Exception as e:
+            print(f"Model inference error: {str(e)}")
+            return jsonify({'error': 'Failed to process image with model'}), 500
         
         # Extract predictions from the results
         predictions = []
         for result in results:
-            # Access bounding boxes and labels (assuming results is a list)
             for box in result.boxes:
-                # Convert the box object into a list or array format
-                box_values = box.xywh[0].cpu().numpy()  # Accessing box as tensor and converting to NumPy array
+                box_values = box.xywh[0].cpu().numpy()
                 prediction = {
-                    'pred_class': int(box.cls.cpu().item()),  # Ensure class is an integer
-                    'confidence': float(box.conf.cpu().item()),  # Ensure confidence is a float
-                    'x_center': float(box_values[0]),  # Extract the x-center
-                    'y_center': float(box_values[1]),  # Extract the y-center
-                    'width': float(box_values[2]),  # Extract the width
-                    'height': float(box_values[3]),  # Extract the height
+                    'pred_class': int(box.cls.cpu().item()),
+                    'confidence': float(box.conf.cpu().item()),
+                    'x_center': float(box_values[0]),
+                    'y_center': float(box_values[1]),
+                    'width': float(box_values[2]),
+                    'height': float(box_values[3]),
                 }
                 predictions.append(prediction)
 
-        # Return the predictions in a JSON format
-        return jsonify({'predictions': predictions})
+        # Return comprehensive prediction results
+        response_data = {
+            'predictions': predictions,
+            'image_url': oss_url,
+            'condition_count': len(predictions)
+        }
+        return jsonify(response_data)
 
     except Exception as e:
         print(f"Error: {e}")  # Debugging line
         return jsonify({'error': str(e)}), 500
-    
 
 # chat with context and chathistory
 @ohamodel_bp.route('/chat', methods=['POST'])
