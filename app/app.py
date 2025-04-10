@@ -6,17 +6,11 @@ from sqlalchemy import inspect
 import logging
 from config import Config
 from database.init_db import init_db
-from routes.skin_analysis import skin_analysis_bp
-from models.skin_analysis import SkinAnalysis
-from migrations.create_skin_analyses import create_skin_analyses_table
-from migrations.add_annotated_image import add_annotated_image_column
 
 from flask import send_from_directory
 import os
 from nanoid import generate  # Import nanoid
 from flask_jwt_extended import JWTManager
-
-from models.ingredient import populate_ingredients
 
 
 app = Flask(__name__, static_folder='uploads')
@@ -64,20 +58,6 @@ app.register_blueprint(user_bp, url_prefix='/user')
 app.register_blueprint(ohamodel_bp, url_prefix='/ohamodel')
 
 
-from routes.dpmodel import dpmodel_bp
-app.register_blueprint(dpmodel_bp, url_prefix='/dpmodel')
-
-from routes.acnemodel import acnemodel_bp
-app.register_blueprint(acnemodel_bp, url_prefix='/acnemodel')
-
-app.register_blueprint(skin_analysis_bp, url_prefix='/skin-analysis')
-
-
-from routes.foodmodel import foodmodel_bp
-app.register_blueprint(foodmodel_bp, url_prefix='/foodmodel')
-
-from routes.gpt import gpt_bp
-app.register_blueprint(gpt_bp, url_prefix='/gpt')
 
 from routes.auth import auth_bp
 app.register_blueprint(auth_bp, url_prefix='/auth')
@@ -113,7 +93,6 @@ def create_all_tables():
             logging.error(f"Error during table creation: {e}")
             raise
 
-        populate_ingredients()
 
 create_all_tables()
 
